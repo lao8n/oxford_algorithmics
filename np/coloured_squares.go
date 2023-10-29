@@ -4,26 +4,27 @@ import "fmt"
 
 func main() {
 	fmt.Println("hello")
+	sq := square{}
+	sq.setup("wybr")
+	fmt.Println(sq.colours)
 }
 
 type board struct {
-	rows []string
-	cols []string
+	locations [][]*square
 }
 
-// want to make the comparison operation really easy
-// where BRWY == BRWY for inside and outside
+// string are always in the order top-right-bottom-left
 type square struct {
 	rotation int
-	row      []string
-	col      []string
+	colours  []string
 }
 
-// rbyw - red blue yellow white
 func (sq *square) setup(s string) {
-	// each type of rotation
-	sq.row = []string{
-		string(s[0] + s[1]),
+	sq.colours = []string{s}
+	// add 3 rotations
+	for i := 0; i < 3; i++ {
+		prev := sq.colours[i]
+		cur := prev[1:] + string(prev[0])
+		sq.colours = append(sq.colours, cur)
 	}
-
 }
