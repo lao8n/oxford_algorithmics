@@ -6,6 +6,7 @@ import (
 
 	"gonum.org/v1/plot"
 	"gonum.org/v1/plot/plotter"
+	"gonum.org/v1/plot/vg"
 )
 
 func binarySearch(powerPlants []loc) (float64, loc, loc, []point, []point) {
@@ -24,15 +25,15 @@ func binarySearch(powerPlants []loc) (float64, loc, loc, []point, []point) {
 	mostWest, mostEast := float64(mostWestInt), float64(mostEastInt)
 	eps := 1e-1
 	data1 := make([]point, 0)
-	// data2 := make([]point, 0)
+	data2 := make([]point, 0)
 	for mostEast-mostWest > eps {
 		// search space: [mostWest - mid1 - mid2 - mostEast]
 		mid1 := mostWest + (mostEast-mostWest)/3
 		cost1, _, _ := calculateCost(powerPlants, mid1)
 		mid2 := mostEast - (mostEast-mostWest)/3
 		cost2, _, _ := calculateCost(powerPlants, mid2)
-		// data1 = append(data1, point{mid1, cost1})
-		// data2 = append(data2, point{mid2, cost2})
+		data1 = append(data1, point{mid1, cost1})
+		data2 = append(data2, point{mid2, cost2})
 		// pick best search space
 		if cost1 < cost2 {
 			mostEast = mid2
@@ -83,26 +84,26 @@ func plotCosts(data1 []point, data2 []point) {
 		pts1[i].X = pt.x
 		pts1[i].Y = pt.cost
 	}
-	line1, err := plotter.NewLine(pts1)
+	line1, err := plotter.NewScatter(pts1)
 	if err != nil {
 		fmt.Println(err)
 	}
 	p.Add(line1)
-	// fmt.Println(line1)
-	// pts2 := make(plotter.XYs, len(data2))
-	// for i, pt := range data2 {
-	// 	pts2[i].X = pt.x
-	// 	pts2[i].Y = pt.cost
-	// }
-	// line2, err := plotter.NewLine(pts2)
-	// if err != nil {
-	// 	fmt.Println(err)
-	// }
-	// p.Add(line2)
-	// // fmt.Println(line2)
-	// if err := p.Save(4*vg.Inch, 4*vg.Inch, "line_graph.png"); err != nil {
-	// 	fmt.Println(err)
-	// }
+	fmt.Println(line1)
+	pts2 := make(plotter.XYs, len(data2))
+	for i, pt := range data2 {
+		pts2[i].X = pt.x
+		pts2[i].Y = pt.cost
+	}
+	line2, err := plotter.NewScatter(pts2)
+	if err != nil {
+		fmt.Println(err)
+	}
+	p.Add(line2)
+	// fmt.Println(line2)
+	if err := p.Save(4*vg.Inch, 4*vg.Inch, "line_graph.png"); err != nil {
+		fmt.Println(err)
+	}
 }
 
 func main() {
