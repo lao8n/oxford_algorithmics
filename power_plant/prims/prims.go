@@ -46,6 +46,7 @@ func prims(powerPlants []loc) (float64, []edge) {
 	for h.Len() > 0 && visitedCount < len(powerPlants) {
 		// get neighbour edge with lowest cost
 		minEdge := heap.Pop(&h).(edge)
+
 		// we are going from current tree to new vertex
 		newVertex := minEdge.to
 		if visited[minEdge.to] {

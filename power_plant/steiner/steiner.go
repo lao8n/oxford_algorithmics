@@ -5,17 +5,23 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/RH12503/Triangula/geom"
+	"github.com/RH12503/Triangula/normgeom"
+	"github.com/RH12503/Triangula/triangulation"
 	"gonum.org/v1/plot"
 	"gonum.org/v1/plot/plotter"
 	"gonum.org/v1/plot/vg"
 )
 
-func dijkstras(powerPlants []loc) map[loc]map[loc]float64 {
+func prims(powerPlants []loc) (float64, []edge) {
+	// build visited map
+	visited := make(map[loc]bool, len(powerPlants))
 	// build adjacency list of edges
 	adjList := make(map[loc][]edge, len(powerPlants))
 
-	// initialize adjacency list
+	// initialize visited map and adjacency list
 	for i, powerPlantI := range powerPlants {
+		visited[powerPlantI] = false
 		for j := i + 1; j < len(powerPlants); j++ {
 			powerPlantJ := powerPlants[j]
 			// from power plant I to power plant J
@@ -27,61 +33,7 @@ func dijkstras(powerPlants []loc) map[loc]map[loc]float64 {
 		}
 	}
 
-	// build dp table
-	shortestPaths := make(map[loc]map[loc]float64, len(powerPlants))
-	for _, powerPlantI := range powerPlants {
-		shortestPaths[powerPlantI] = make(map[loc]float64, len(powerPlants))
-		for _, powerPlantJ := range powerPlants {
-			// same power plant so 0 distance
-			if powerPlantI.x == powerPlantJ.x && powerPlantI.y == powerPlantJ.y {
-				shortestPaths[powerPlantI][powerPlantJ] = 0
-			} else {
-				shortestPaths[powerPlantI][powerPlantJ] = math.MaxFloat64
-			}
-		}
-	}
-
-	// dijkstra's algorithm
-	for _, powerPlant := range powerPlants {
-		queue := []loc{powerPlant}
-		visited := make(map[loc]bool, len(powerPlants))
-		visited[powerPlant] = true
-		for len(queue) > 0 {
-			popped := queue[0]
-			queue = queue[1:]
-			for _, edge := range adjList[popped] {
-				if !visited[edge.to] {
-					shortestPaths[powerPlant][edge.to] = shortestPaths[powerPlant][edge.from] + edge.cost
-					visited[edge.to] = true
-					queue = append(queue, edge.to)
-				}
-			}
-		}
-	}
-	return shortestPaths
-}
-
-func metricClosure(powerPlants []loc, shortestPaths map[loc]map[loc]float64) map[loc][]edge {
-	adjList := make(map[loc][]edge, len(powerPlants))
-
-	for from, m := range shortestPaths {
-		for to, cost := range m {
-			// exclude edges from power plant to itself
-			if cost != 0.0 {
-				// only need to go one way as shortestPaths has all combinations
-				fromTo := edge{from, to, cost}
-				adjList[from] = append(adjList[from], fromTo)
-			}
-		}
-	}
-	return adjList
-}
-
-func prims(powerPlants []loc, adjList map[loc][]edge) (float64, []edge) {
-	// build visited map
-	visited := make(map[loc]bool, len(powerPlants))
-
-	// initialize heap with point 0 edges
+	// initailize heap with point 0 edges
 	pointZeroEdges := adjList[powerPlants[0]]
 	h := make(Heap, len(pointZeroEdges))
 	copy(h, pointZeroEdges)
@@ -97,6 +49,7 @@ func prims(powerPlants []loc, adjList map[loc][]edge) (float64, []edge) {
 	for h.Len() > 0 && visitedCount < len(powerPlants) {
 		// get neighbour edge with lowest cost
 		minEdge := heap.Pop(&h).(edge)
+
 		// we are going from current tree to new vertex
 		newVertex := minEdge.to
 		if visited[minEdge.to] {
@@ -116,6 +69,40 @@ func prims(powerPlants []loc, adjList map[loc][]edge) (float64, []edge) {
 		}
 	}
 	return rollingCost, edges
+}
+
+func calculateEdgeCost(powerPlants []loc, i, j int) float64 {
+	sumSquares := math.Pow(powerPlants[i].x-powerPlants[j].x, 2) + math.Pow(powerPlants[i].y-powerPlants[j].y, 2)
+	return math.Pow(sumSquares, 0.5)
+}
+
+func nonTerminal(powerPlants []loc, w int, h int) []loc {
+	// delauney triangulation
+	powerPlantMap := make(map[loc]bool, len(powerPlants))
+	// Triangulate(points normgeom.NormPointGroup, w, h int) []geom.Triangle
+	var points normgeom.NormPointGroup
+	for _, powerPlant := range powerPlants {
+		points = append(points, normgeom.NormPoint{powerPlant.x, powerPlant.y})
+		powerPlantMap[powerPlant] = true
+	}
+
+	// add non-terminal nodes
+	nonTerminalNodes := make([]loc, 0)
+	for _, triangle := range triangulation.Triangulate(points, w, h) {
+		nonTerminal := centroid(triangle)
+		if !powerPlantMap[nonTerminal] {
+			nonTerminalNodes = append(nonTerminalNodes, nonTerminal)
+		}
+	}
+	return nonTerminalNodes
+}
+
+func centroid(triangle geom.Triangle) loc {
+	centroid := loc{
+		x: float64(triangle.Points[0].X+triangle.Points[1].X+triangle.Points[2].X) / 3.0,
+		y: float64(triangle.Points[0].Y+triangle.Points[1].Y+triangle.Points[2].Y) / 3.0,
+	}
+	return centroid
 }
 
 func plotCosts(powerPlants []loc, edges []edge) {
@@ -147,23 +134,6 @@ func plotCosts(powerPlants []loc, edges []edge) {
 	}
 }
 
-type Heap []edge
-
-func (h *Heap) Push(x interface{}) { *h = append(*h, x.(edge)) }
-func (h *Heap) Pop() interface{} {
-	previous, n := *h, h.Len()
-	*h = previous[:n-1]
-	return previous[n-1]
-}
-func (h Heap) Len() int           { return len(h) }
-func (h Heap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
-func (h Heap) Less(i, j int) bool { return h[i].cost < h[j].cost }
-
-func calculateEdgeCost(powerPlants []loc, i, j int) float64 {
-	sumSquares := math.Pow(powerPlants[i].x-powerPlants[j].x, 2) + math.Pow(powerPlants[i].y-powerPlants[j].y, 2)
-	return math.Pow(sumSquares, 0.5)
-}
-
 type loc struct {
 	x float64
 	y float64
@@ -175,17 +145,17 @@ type edge struct {
 	cost float64
 }
 
-// func nonTerminalNodes(southWest loc, northEast loc, numPoints float64) []loc {
-// 	x := (northEast.x - southWest.x) / numPoints
-// 	y := (northEast.y - southWest.y) / numPoints
-// 	nonTerminal := make([]loc, 0)
-// 	for i := southWest.x; i <= northEast.x; i += x {
-// 		for j := southWest.y; j <= northEast.y; j += y {
-// 			nonTerminal = append(nonTerminal, loc{i, j})
-// 		}
-// 	}
-// 	return nonTerminal
-// }
+type Heap []edge
+
+func (h *Heap) Push(x interface{}) { *h = append(*h, x.(edge)) }
+func (h *Heap) Pop() interface{} {
+	previous, n, popped := *h, h.Len(), edge{}
+	*h, popped = previous[:n-1], previous[n-1]
+	return popped
+}
+func (h Heap) Len() int           { return len(h) }
+func (h Heap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
+func (h Heap) Less(i, j int) bool { return h[i].cost < h[j].cost }
 
 func main() {
 	powerPlants := []loc{
@@ -198,17 +168,17 @@ func main() {
 		{32, 36},
 		{40, 35},
 	}
-	// nonTerminal := nonTerminalNodes(loc{10, 20}, loc{40, 40}, 20)
-	// allNodes := append(powerPlants, nonTerminal...)
-	shortestPaths := dijkstras(powerPlants)
-
-	adjList := metricClosure(powerPlants, shortestPaths)
-	// fmt.Println(adjList)
-
-	cost, edges := prims(powerPlants, adjList)
-
-	// edges = steinerTree(powerPlants, edges, nonTerminal)
-
-	plotCosts(powerPlants, edges)
-	fmt.Println(cost, edges)
+	minCost, minEdges := prims(powerPlants)
+	finalNodes := powerPlants
+	for _, nT := range nonTerminal(powerPlants, 1, 1) {
+		cost, edges := prims(append(finalNodes, nT))
+		if cost < minCost {
+			fmt.Println(minCost)
+			minCost = cost
+			minEdges = edges
+			finalNodes = append(finalNodes, nT)
+		}
+	}
+	plotCosts(finalNodes, minEdges)
+	fmt.Println(minCost, minEdges)
 }
