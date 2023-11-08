@@ -79,7 +79,6 @@ func calculateEdgeCost(powerPlants []loc, i, j int) float64 {
 func nonTerminal(powerPlants []loc, w int, h int) []loc {
 	// delauney triangulation
 	powerPlantMap := make(map[loc]bool, len(powerPlants))
-	// Triangulate(points normgeom.NormPointGroup, w, h int) []geom.Triangle
 	var points normgeom.NormPointGroup
 	for _, powerPlant := range powerPlants {
 		points = append(points, normgeom.NormPoint{powerPlant.x, powerPlant.y})
@@ -105,7 +104,9 @@ func centroid(triangle geom.Triangle) loc {
 	return centroid
 }
 
-func plotCosts(powerPlants []loc, edges []edge) {
+type SquareGlyph struct{}
+
+func plotCosts(powerPlants []loc, nonTerminal []loc, edges []edge) {
 	p := plot.New()
 	for _, edge := range edges {
 		pts := make(plotter.XYs, 2)
@@ -129,6 +130,18 @@ func plotCosts(powerPlants []loc, edges []edge) {
 		fmt.Println(err)
 	}
 	p.Add(scatter)
+
+	pts = make(plotter.XYs, len(nonTerminal))
+	for i, nT := range nonTerminal {
+		pts[i].X = nT.x
+		pts[i].Y = nT.y
+	}
+	scatter, err = plotter.NewScatter(pts)
+	if err != nil {
+		fmt.Println(err)
+	}
+	p.Add(scatter)
+
 	if err := p.Save(4*vg.Inch, 4*vg.Inch, "line_graph.png"); err != nil {
 		fmt.Println(err)
 	}
@@ -170,7 +183,8 @@ func main() {
 	}
 	minCost, minEdges := prims(powerPlants)
 	finalNodes := powerPlants
-	for _, nT := range nonTerminal(powerPlants, 1, 1) {
+	nTs := nonTerminal(powerPlants, 1, 1)
+	for _, nT := range nTs {
 		cost, edges := prims(append(finalNodes, nT))
 		if cost < minCost {
 			fmt.Println(minCost)
@@ -179,6 +193,6 @@ func main() {
 			finalNodes = append(finalNodes, nT)
 		}
 	}
-	plotCosts(finalNodes, minEdges)
+	plotCosts(powerPlants, nTs, minEdges)
 	fmt.Println(minCost, minEdges)
 }
